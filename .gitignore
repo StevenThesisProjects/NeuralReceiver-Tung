@@ -21,3 +21,7 @@ Thumbs.db
 *.pt
 *.pth
 *.ckpt
+
+# Test and coverage artifacts
+.pytest_cache/
+
