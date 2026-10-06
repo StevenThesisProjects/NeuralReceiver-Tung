@@ -53,11 +53,13 @@ def test_seed_reproducibility():
 
 
 def test_plots_artifacts():
-    """Verify presence and completeness of official thesis result plots."""
+    """Verify presence and completeness of official thesis result plots across categorized folders."""
     from pathlib import Path
     plots_dir = Path("plots")
     assert plots_dir.exists() and plots_dir.is_dir(), "plots/ directory must exist"
-    png_files = list(plots_dir.glob("*.png"))
+    assert (plots_dir / "benchmark").exists(), "plots/benchmark directory must exist"
+    assert (plots_dir / "evaluation").exists(), "plots/evaluation directory must exist"
+    png_files = list(plots_dir.rglob("*.png"))
     assert len(png_files) == 20, f"Expected exactly 20 result plots, found {len(png_files)}"
     readme = plots_dir / "README.md"
     assert readme.exists(), "plots/README.md catalog must exist"
