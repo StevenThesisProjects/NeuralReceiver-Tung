@@ -1,0 +1,26 @@
+# Core Deep Learning & Tensor Acceleration
+torch>=2.2.0
+torchvision
+torchaudio
+
+# 6G Physical Layer Simulation (Sionna PyTorch PHY preview / v1.x)
+sionna>=1.0.0
+
+# Scientific & Mathematical Computing
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0
+
+# Visualization & Plotting
+matplotlib>=3.7.0
+
+# Neural Architecture Complexity Profiling
+thop>=0.1.1.post2209072238
+
+# Configuration Management (Single-Source of Truth)
+pyyaml>=6.0
+
+# Testing & Quality Assurance
+pytest>=7.0.0
+
+# Optional / Legacy Baseline compatibility (TensorFlow 2.x for legacy Sionna TF if needed)
+# tensorflow>=2.13.0
