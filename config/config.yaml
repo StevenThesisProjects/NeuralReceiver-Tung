@@ -1,0 +1,68 @@
+# ==============================================================================
+# nrx-bounded: Single Source of Truth Configuration File (writing-as-code)
+# ==============================================================================
+# All PHY, channel, neural model, training, and evaluation parameters are
+# derived strictly from docs/config_resolution.md and verified checkpoints.
+
+seed: 42
+
+phy:
+  carrier_frequency: 3.5e+9            # 3.5 GHz
+  subcarrier_spacing: 30000.0          # 30 kHz
+  fft_size: 128                        # N_FFT (F dimension)
+  num_ofdm_symbols: 14                 # T dimension
+  guard_subcarriers: [5, 6]            # [left guard, right guard]
+  dc_null: true                        # 1 DC subcarrier nulled
+  pilot_ofdm_symbol_indices: [2, 11]   # Symbols containing pilots
+  num_effective_subcarriers: 116       # 128 - 5 - 6 - 1 = 116 useful subcarriers
+  modulation:
+    type: "64QAM"
+    num_bits_per_symbol: 6
+  coderate: 0.9                        # LDPC coderate
+  num_tx_ant: 1                        # Single UT antenna
+  num_rx_ant: 2                        # Dual-polarized BS antenna array (SIMO 1x2)
+
+channel:
+  default_model: "CDL-C"
+  delay_spread:
+    cdl_a: 3.0e-08                     # 30 ns
+    cdl_b: 1.0e-07                     # 100 ns
+    cdl_c: 3.0e-07                     # 300 ns
+  speed_min: 0.0                       # m/s
+  speed_max: 50.0                      # m/s
+
+models:
+  proposed_axial:
+    d_model: 128                       # Embedding dimension
+    num_heads: 4                       # Multi-head attention heads
+    num_layers: 6                      # 6 factorized axial attention blocks
+    dim_feedforward: 256               # FFN intermediate dimension (2 * d_model)
+    dropout: 0.1
+    in_channels: 12                    # 12-channel concatenated tensor (D8)
+    max_time: 14                       # Max time dimension for 2D PosEnc
+    max_freq: 128                      # Max freq dimension for 2D PosEnc
+  baseline_cnn:
+    num_conv_channels: 128
+    num_blocks: 11                     # 11 residual convolutional blocks
+    in_channels: 5                     # 5-channel concatenated tensor (D8 CNN)
+
+training:
+  optimizer: "AdamW"
+  learning_rate: 0.0001                # 1e-4
+  weight_decay: 0.0001                 # 1e-4
+  batch_size: 16
+  gradient_accumulation_steps: 8       # Effective batch size = 16 * 8 = 128
+  effective_batch_size: 128
+  iterations: 100000                   # 100k training iterations
+  ebno_db_min: 0.0
+  ebno_db_max: 20.0
+  device: "cuda"
+
+evaluation:
+  ebno_db_min: 0.0
+  ebno_db_max: 20.0
+  ebno_db_step: 2.0
+  batch_size: 128
+  num_target_block_errors: 100
+  max_mc_iter: 1000
+  target_bler: 0.0001
