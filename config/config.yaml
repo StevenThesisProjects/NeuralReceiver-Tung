@@ -58,6 +58,9 @@ training:
   ebno_db_max: 20.0
   device: "cuda"
 
+paths:
+  plots_dir: "plots"
+
 evaluation:
   ebno_db_min: 0.0
   ebno_db_max: 20.0
@@ -66,3 +69,6 @@ evaluation:
   num_target_block_errors: 100
   max_mc_iter: 1000
   target_bler: 0.0001
+  plots_dir: "plots"
+  save_plots: true
+

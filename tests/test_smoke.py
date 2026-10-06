@@ -50,3 +50,15 @@ def test_seed_reproducibility():
 
     assert np.allclose(np_sample_1, np_sample_2), "NumPy RNG must be deterministic"
     assert torch.allclose(torch_sample_1, torch_sample_2), "PyTorch RNG must be deterministic"
+
+
+def test_plots_artifacts():
+    """Verify presence and completeness of official thesis result plots."""
+    from pathlib import Path
+    plots_dir = Path("plots")
+    assert plots_dir.exists() and plots_dir.is_dir(), "plots/ directory must exist"
+    png_files = list(plots_dir.glob("*.png"))
+    assert len(png_files) == 20, f"Expected exactly 20 result plots, found {len(png_files)}"
+    readme = plots_dir / "README.md"
+    assert readme.exists(), "plots/README.md catalog must exist"
+
