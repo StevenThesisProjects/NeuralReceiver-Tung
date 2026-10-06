@@ -5,6 +5,8 @@ __pycache__/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+*.ipynb_checkpoints/
+*.ipynb_checkpoints
 
 # Virtual environments
 venv/
@@ -15,7 +17,7 @@ env/
 .DS_Store
 Thumbs.db
 
-# Large weights and checkpoints (tracked separately if needed)
+# Large weights and checkpoints
 *.pt
 *.pth
 *.ckpt
