@@ -23,7 +23,9 @@ phy:
     num_bits_per_symbol: 6
   coderate: 0.9                        # LDPC coderate
   num_tx_ant: 1                        # Single UT antenna
+  num_tx_antennas: 1                   # Single UT antenna (alias)
   num_rx_ant: 2                        # Dual-polarized BS antenna array (SIMO 1x2)
+  num_rx_antennas: 2                   # Dual-polarized BS antenna array (SIMO 1x2 alias)
 
 channel:
   cdl_model: "C"                       # CDL model profile (original code: cdl_model = "C")
