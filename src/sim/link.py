@@ -191,6 +191,14 @@ class LinkConfig:
     def create_resource_grid(self, device: Optional[Union[str, torch.device]] = None) -> Any:
         """Create and return a Sionna ResourceGrid or synthetic equivalent."""
         if _SIONNA_AVAILABLE:
+            try:
+                import sionna
+                if hasattr(sionna, "phy") and hasattr(sionna.phy, "config"):
+                    sionna.phy.config.seed = int(self.seed)
+                elif hasattr(sionna, "config"):
+                    sionna.config.seed = int(self.seed)
+            except Exception:
+                pass
             return ResourceGrid(
                 num_ofdm_symbols=self.num_ofdm_symbols,
                 fft_size=self.fft_size,
@@ -338,6 +346,7 @@ def batch_generator(
             np.random.seed(seed)
 
         if _SIONNA_AVAILABLE:
+            rg = link_config.create_resource_grid(device=device)
             if seed is not None:
                 try:
                     import sionna
@@ -347,7 +356,6 @@ def batch_generator(
                         sionna.config.seed = seed
                 except Exception:
                     pass
-            rg = link_config.create_resource_grid(device=device)
             bs = BinarySource(seed=seed)
             mapper = Mapper("qam", link_config.num_bits_per_symbol)
             rg_mapper = ResourceGridMapper(rg)
