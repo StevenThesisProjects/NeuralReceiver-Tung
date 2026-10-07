@@ -90,9 +90,9 @@ Trong quá trình đối soát giữa bản thảo luận văn, mã nguồn tron
   - Kênh 10: Logarit phương sai nhiễu $\log_{10}(N_0)$ mở rộng lên lưới 2D
   - Kênh 11: Mặt nạ phi công (Pilot mask, giá trị 1.0 tại ký tự 2 và 11)
 
-### D9: Độ trễ trễ (Delay Spread) mô hình kênh CDL
-- *Bất ngờ / Mâu thuẫn*: Code notebook gán cứng 100 ns cho mọi mô hình kênh.
-- *Quyết định giải quyết*: Chuẩn hóa theo tiêu chuẩn 3GPP TR 38.901: CDL-A = 30 ns, CDL-B = 100 ns, CDL-C = 300 ns. Trong file cấu hình đơn nguồn đã cấu hình rõ cho từng mô hình với mô hình mặc định là CDL-C (300 ns).
+### D9: Độ trải trễ (Delay Spread) mô hình kênh CDL
+- *Bất ngờ / Mâu thuẫn*: Xuất hiện giả định phân tách 30/100/300 ns theo tiêu chuẩn bên ngoài (3GPP TR 38.901).
+- *Quyết định giải quyết*: Đối soát toàn bộ 5 notebook gốc trong `Storage/IPYNB code` và bản thảo luận văn, tất cả đều đồng nhất gán cứng `delay_spread = 100e-9` (100 ns hay $10^{-7}\text{ s}$). Đã chuẩn hóa file cấu hình `config/config.yaml` về đúng giá trị vô hướng `delay_spread: 1.0e-07`, loại bỏ cấu trúc từ điển suy diễn bên ngoài nhằm đảm bảo 100% khớp thực nghiệm gốc.
 
 ### D13: Siêu tham số huấn luyện & Dải Eb/N0
 - *Quyết định giải quyết*: Bộ tối ưu AdamW với $lr = 10^{-4}$, weight decay $= 10^{-4}$, kích thước batch thực tế bằng 128 (batch size 16 kết hợp 8 bước tích lũy gradient `gradient_accumulation_steps = 8`), dải $E_b/N_0$ huấn luyện từ $0.0\text{ dB}$ đến $20.0\text{ dB}$.

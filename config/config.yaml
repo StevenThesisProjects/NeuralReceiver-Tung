@@ -2,18 +2,21 @@
 # nrx-bounded: Single Source of Truth Configuration File (writing-as-code)
 # ==============================================================================
 # All PHY, channel, neural model, training, and evaluation parameters are
-# derived strictly from docs/config_resolution.md and verified checkpoints.
+# derived strictly from original notebook code and verified checkpoints.
 
 seed: 42
 
 phy:
-  carrier_frequency: 3.5e+9            # 3.5 GHz
-  subcarrier_spacing: 30000.0          # 30 kHz
+  carrier_frequency: 3.5e+9            # 3.5 GHz (Hz)
+  subcarrier_spacing: 30000.0          # 30 kHz (Hz)
   fft_size: 128                        # N_FFT (F dimension)
   num_ofdm_symbols: 14                 # T dimension
-  guard_subcarriers: [5, 6]            # [left guard, right guard]
+  num_guard_carriers: [5, 6]           # [left guard, right guard] (num_guard_carriers)
+  guard_subcarriers: [5, 6]            # Alias for backward compatibility
   dc_null: true                        # 1 DC subcarrier nulled
+  pilot_pattern: "kronecker"           # Kronecker pilot pattern
   pilot_ofdm_symbol_indices: [2, 11]   # Symbols containing pilots
+  cyclic_prefix_length: 0              # Frequency-domain simulation
   num_effective_subcarriers: 116       # 128 - 5 - 6 - 1 = 116 useful subcarriers
   modulation:
     type: "64QAM"
@@ -23,18 +26,17 @@ phy:
   num_rx_ant: 2                        # Dual-polarized BS antenna array (SIMO 1x2)
 
 channel:
-  default_model: "CDL-C"
-  delay_spread:
-    cdl_a: 3.0e-08                     # 30 ns
-    cdl_b: 1.0e-07                     # 100 ns
-    cdl_c: 3.0e-07                     # 300 ns
-  speed_min: 0.0                       # m/s
-  speed_max: 50.0                      # m/s
+  cdl_model: "C"                       # CDL model profile (original code: cdl_model = "C")
+  delay_spread: 1.0e-07                # 100 ns (original code: delay_spread = 100e-9 s)
+  speed: 0.0                           # Speed for evaluation and training [m/s]
+  speed_1: 50.0                        # Max speed for training [m/s]
+  speed_min: 0.0                       # Alias for Sionna min_speed
+  speed_max: 50.0                      # Alias for Sionna max_speed
 
 models:
   proposed_axial:
-    d_model: 128                       # Embedding dimension
-    num_heads: 4                       # Multi-head attention heads
+    d_model: 128                       # Embedding dimension (num_conv_channels)
+    num_heads: 4                       # Multi-head attention heads (nhead)
     num_layers: 6                      # 6 factorized axial attention blocks
     dim_feedforward: 256               # FFN intermediate dimension (2 * d_model)
     dropout: 0.1
@@ -50,12 +52,12 @@ training:
   optimizer: "AdamW"
   learning_rate: 0.0001                # 1e-4
   weight_decay: 0.0001                 # 1e-4
-  batch_size: 16
-  gradient_accumulation_steps: 8       # Effective batch size = 16 * 8 = 128
-  effective_batch_size: 128
-  iterations: 100000                   # 100k training iterations
-  ebno_db_min: 0.0
-  ebno_db_max: 20.0
+  batch_size: 16                       # training_batch_size
+  gradient_accumulation_steps: 8       # accumulation_steps
+  effective_batch_size: 128            # 16 * 8 = 128
+  iterations: 100000                   # num_training_iterations
+  ebno_db_min: 0.0                     # Min Eb/N0 in training
+  ebno_db_max: 20.0                    # Max Eb/N0 in training
   device: "cuda"
 
 paths:
@@ -64,11 +66,10 @@ paths:
 evaluation:
   ebno_db_min: 0.0
   ebno_db_max: 20.0
-  ebno_db_step: 2.0
+  ebno_db_step: 0.5                    # Original code: np.arange(..., 0.5) (NOT 2.0)
   batch_size: 128
   num_target_block_errors: 100
   max_mc_iter: 1000
   target_bler: 0.0001
   plots_dir: "plots"
   save_plots: true
-

@@ -35,6 +35,13 @@ def test_config_validity():
     assert axial.get("num_layers") == 6, f"Expected num_layers=6, got {axial.get('num_layers')}"
     assert axial.get("in_channels") == 12, f"Expected in_channels=12, got {axial.get('in_channels')}"
 
+    channel = cfg.get("channel", {})
+    assert channel.get("cdl_model") == "C", f"Expected cdl_model='C', got {channel.get('cdl_model')}"
+    assert abs(channel.get("delay_spread") - 100e-9) < 1e-12, f"Expected delay_spread=100e-9, got {channel.get('delay_spread')}"
+
+    eval_cfg = cfg.get("evaluation", {})
+    assert eval_cfg.get("ebno_db_step") == 0.5, f"Expected ebno_db_step=0.5, got {eval_cfg.get('ebno_db_step')}"
+
 
 def test_seed_reproducibility():
     """Verify deterministic RNG behavior across NumPy and PyTorch."""
