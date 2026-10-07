@@ -16,6 +16,7 @@ Tài liệu này tổng hợp quá trình phân tích kỹ thuật, đối soát
 | **D13** | **Huấn luyện & SNR**<br>- Optimizer<br>- Learning rate ($\eta$)<br>- Weight decay<br>- Dải $E_b/N_0$ train<br>- Batch size / Accumulation | Luận văn ghi $10^{-3}$ vs $10^{-4}$;<br>Dải SNR cố định vs động | `AdamW`<br>`lr = 1e-4`<br>`weight_decay = 1e-4`<br>`ebno_db_min ≈ 8.8 dB`<br>`ebno_db_max ≈ 22.0 dB`<br>`batch = 16`, `accum = 8` | Checkpoint train 100k iters với AdamW lr 1e-4 | **AdamW**<br>**$\text{lr} = 10^{-4}$**<br>**$\text{wd} = 10^{-4}$**<br>**Batch = 16 (Accum 8 -> 128)**<br>**Dải $E_b/N_0$: 0 dB đến 20 dB** (hoặc [8.8, 22.0] dB theo Shannon) | Tránh phân kỳ gradient khi train Transformer/Axial Attention. Dải Eb/N0 động bao phủ toàn bộ vùng thác lỗi (waterfall region) của 64-QAM rate 0.9. |
 | **D14** | **Kiểu nội suy LS (LS Interpolation)**<br>- `interpolation_type` | Luận văn không nêu rõ thuật toán nội suy cụ thể | `interpolation_type = "nn"` (Cell 25, Cell 28, Cell 36) | Không phụ thuộc trọng số NN | **`interpolation_type = "nn"`** (Nearest Neighbor) | Mã nguồn thực nghiệm gốc trong notebook sử dụng `LSChannelEstimator(resource_grid, interpolation_type="nn")`. Nội suy lân cận gần nhất theo thời gian (symbols $0..6$ dùng pilot symbol 2, symbols $7..13$ dùng pilot symbol 11). |
 | **D15** | **Kiến trúc San bằng LMMSE (Equalizer Architecture)**<br>- Dạng bộ lọc san bằng | Luận văn ghi LMMSE | Cell 24 (`LMMSEFeatureExtractor`) & Cell 36 (`LMMSEEqualizer`) | Không phụ thuộc trọng số NN | **Single-tap SIMO Wiener Filter per RE**:<br>$\hat{x} = \frac{\mathbf{h}^H \mathbf{y}}{\|\mathbf{h}\|^2 + N_0}$ | Đối với hệ SIMO 1 phát nhiều thu per-carrier, bộ lọc LMMSE rút gọn thành bộ lọc Wiener một tap giải tích trên từng phần tử tài nguyên. Biểu thức không chệch (unbiased) $\hat{x}_{ub} = \frac{\mathbf{h}^H \mathbf{y}}{\|\mathbf{h}\|^2}$ kết hợp phương sai tạp âm hiệu dụng $\sigma_{eff}^2 = \frac{N_0 + \sigma_e^2}{\|\mathbf{h}\|^2}$ cung cấp đầu vào chuẩn xác cho bộ giải ánh xạ Demapper (APP / Max-Log). |
+| **D16** | **Quy trình Quét BLER & Khoảng tin cậy**<br>- Chuẩn tin cậy binomial<br>- Điều kiện dừng sớm<br>- Dải SNR & 1-lệnh DoD | Luận văn không nêu chi tiết CI | `num_target_block_errors = 100`<br>`batch_size = 128`<br>`ebno_db_step = 0.5` | Không phụ thuộc trọng số | **Clopper-Pearson 95% CI** (Beta quantile)<br>**Dừng sớm**: $\ge 100$ block errors hoặc $50,000$ slots<br>**Runner 1-lệnh**: `run_b0_cdlc_benchmark` | Đảm bảo tính chặt chẽ thống kê chuẩn 3GPP cho đường cong BLER thác lỗi (waterfall curve), kẹp chặt $0 \le CI_{low} \le \text{BLER} \le CI_{high} \le 1$. |
 
 ---
 
@@ -85,3 +86,27 @@ Nhằm đảm bảo tính tái lập 100% giữa mã nguồn thực nghiệm g�
   Biểu thức khoảng cách bình phương chuẩn hóa tương đương:
   $$\frac{|\hat{x} - c|^2}{\sigma_{eff}^2} = \frac{|\mathbf{h}^H \mathbf{y} - \|\mathbf{h}\|^2 c|^2}{(N_0 + \sigma_e^2)\|\mathbf{h}\|^2}$$
   giúp khôi phục xác suất hậu nghiệm (APP) và LLR mềm $\ell_A$ với độ chính xác số học tối ưu.
+
+---
+
+## 5. Đặc tả Kỹ thuật Đánh giá Hiệu năng BLER/BER & Khoảng Tin cậy Clopper-Pearson 95% (D16)
+
+Nhằm đảm bảo các đường cong thực nghiệm BLER/BER phản ánh chính xác hiệu năng đường truyền không dây và thỏa mãn tiêu chí Definition of Done (DoD) của Issue #3:
+
+### 5.1. Khoảng tin cậy Clopper-Pearson 95% (`clopper_pearson`)
+- Sử dụng phân phối xác suất Beta quantile nghịch đảo (`scipy.stats.beta.ppf`):
+  - Khi $k = 0$: $CI_{low} = 0.0, \quad CI_{high} = 1.0 - (\alpha/2)^{1/n}$
+  - Khi $k = n$: $CI_{low} = (\alpha/2)^{1/n}, \quad CI_{high} = 1.0$
+  - Khi $0 < k < n$:
+    $$CI_{low} = \text{Beta.ppf}\left(\frac{\alpha}{2}, k, n - k + 1\right)$$
+    $$CI_{high} = \text{Beta.ppf}\left(1 - \frac{\alpha}{2}, k + 1, n - k\right)$$
+- Khẳng định tính toán chặt: $0.0 \le CI_{low} \le \frac{k}{n} \le CI_{high} \le 1.0$.
+
+### 5.2. Tiêu chuẩn Dừng Sớm Monte Carlo (Early Stopping Criteria)
+- Tại mỗi mốc $E_b/N_0$, hàm `bler_point` mô phỏng lặp theo batch và dừng sớm ngay khi một trong hai điều kiện được thỏa mãn:
+  - Số khối lỗi đạt ngưỡng $\ge 100$ (`block_errors >= target_errors`), HOẶC
+  - Tổng số khe truyền đạt trần $50,000$ (`total_blocks >= max_slots`).
+
+### 5.3. Thực thi Đo kiểm 1 Lệnh (1-Command Runner)
+- Hàm `run_b0_cdlc_benchmark(v=10.0, ...)` tự động khởi tạo mô hình kênh 3GPP CDL-C tại vận tốc $10\text{ m/s}$, lưới tài nguyên 64-QAM $R=0.9$, quét dải SNR, tính toán khoảng tin cậy 95% và xuất đồ thị PNG chuẩn vào `plots/evaluation/b0_cdlc_10ms_bler.png`, thỏa mãn trọn vẹn DoD của Issue #3.
+
