@@ -1,6 +1,6 @@
-# Config Resolution Report (D6–D9, D13) — `nrx-bounded`
+# Báo Cáo Chuẩn Hóa Tham Số Kỹ Thuật (System Parameter & Architecture Resolution) — `nrx-bounded`
 
-Tài liệu này đối soát và chốt giá trị thực tế của các tham số then chốt giữa văn bản Luận văn, mã nguồn notebook Colab và trọng số checkpoint thực nghiệm (`weight_proposed_model_64_QAM`, `neural_receiver_weights`). Đây là **Single Source of Truth** làm cơ sở cấu hình cho `config/config.yaml`.
+Tài liệu này tổng hợp quá trình phân tích kỹ thuật, đối soát và chuẩn hóa các tham số then chốt của hệ sinh thái máy thu nơ-ron giữa văn bản Luận văn, mã nguồn thực nghiệm và trọng số checkpoint thực tế (`weight_proposed_model_64_QAM`, `neural_receiver_weights`). Đây là **Single Source of Truth** do tác giả tự xây dựng làm cơ sở thiết lập tệp cấu hình trung tâm `config/config.yaml`.
 
 ---
 
@@ -40,7 +40,7 @@ Thứ tự 12 kênh ghép nối trên chiều Channel ($C_{in} = 12$) của tens
 
 ---
 
-## 3. Kết luận và Hướng dẫn cho Task 5 (`config/config.yaml`)
+## 3. Kết luận & Cấu Trúc Cấu Hình Đơn Nguồn (`config/config.yaml`)
 
 Toàn bộ tham số trong file `config/config.yaml` sẽ lấy trực tiếp từ cột **Quyết định chốt** của bảng trên, phân thành các block:
 - `phy`: tần số sóng mang 3.5 GHz, SCS 30 kHz, FFT 128, OFDM symbols 14, guards [5, 6], DC null true, QAM 64 (6 bits), coderate 0.9.

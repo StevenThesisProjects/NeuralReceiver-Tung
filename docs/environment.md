@@ -1,6 +1,6 @@
 # Environment Specifications — `nrx-bounded`
 
-Tài liệu này chuẩn hóa thông số môi trường thực thi thực tế phục vụ tái lập nghiên cứu theo yêu cầu Issue #2 (`[S1][INFRA]`).
+Tài liệu này chuẩn hóa thông số môi trường thực thi thực tế nhằm đảm bảo tính tái lập (reproducibility) và tính ổn định cho toàn bộ hệ thống mô phỏng thu nơ-ron (Neural Receiver).
 
 ---
 
