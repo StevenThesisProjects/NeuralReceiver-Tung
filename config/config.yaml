@@ -38,6 +38,7 @@ channel:
 models:
   proposed_axial:
     d_model: 128                       # Embedding dimension (num_conv_channels)
+    num_conv_channels: 128             # Alias for d_model
     num_heads: 4                       # Multi-head attention heads (nhead)
     num_layers: 6                      # 6 factorized axial attention blocks
     dim_feedforward: 256               # FFN intermediate dimension (2 * d_model)
@@ -55,6 +56,7 @@ training:
   learning_rate: 0.0001                # 1e-4
   weight_decay: 0.0001                 # 1e-4
   batch_size: 16                       # training_batch_size
+  training_batch_size: 16              # Alias for batch_size
   gradient_accumulation_steps: 8       # accumulation_steps
   effective_batch_size: 128            # 16 * 8 = 128
   iterations: 100000                   # num_training_iterations
