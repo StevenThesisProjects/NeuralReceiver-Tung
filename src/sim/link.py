@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from src.config import load_config
-from src.sim.channels import SyntheticCDL, make_cdl
+from src.sim.channels import SyntheticCDL, SyntheticCDLChannel, make_cdl
 
 try:
     import sionna
@@ -27,7 +27,16 @@ try:
 
     _SIONNA_AVAILABLE = True
 except ImportError:
-    _SIONNA_AVAILABLE = False
+    try:
+        import sionna
+        from sionna.channel import OFDMChannel  # type: ignore
+        from sionna.mapping import BinarySource, Mapper  # type: ignore
+        from sionna.ofdm import ResourceGrid, ResourceGridMapper  # type: ignore
+        from sionna.utils import ebnodb2no, expand_to_rank  # type: ignore
+
+        _SIONNA_AVAILABLE = True
+    except ImportError:
+        _SIONNA_AVAILABLE = False
 
 
 class BatchData(NamedTuple):
@@ -43,7 +52,7 @@ class BatchData(NamedTuple):
 class SyntheticPilotPattern:
     """Fallback pilot pattern when Sionna is unavailable."""
 
-    def __init__(self, num_pilots: int = 232, device: Optional[Union[str, torch.device]] = None):
+    def __init__(self, num_pilots: int = 0, device: Optional[Union[str, torch.device]] = None):
         dev = str(device) if device is not None else "cpu"
         self.pilots = torch.ones((1, 1, num_pilots), dtype=torch.complex64, device=dev)
 
@@ -59,7 +68,7 @@ class SyntheticResourceGrid:
         self.num_rx = config.num_rx_ant
         self.dc_null = config.dc_null
         self.num_guard_carriers = config.num_guard_carriers
-        self.pilot_pattern = SyntheticPilotPattern(device=device)
+        self.pilot_pattern = SyntheticPilotPattern(num_pilots=config.num_pilot_symbols, device=device)
 
         guards = sum(config.num_guard_carriers) if config.num_guard_carriers else 0
         dc = 1 if config.dc_null else 0
@@ -106,6 +115,14 @@ class LinkConfig:
         Spatial streams per transmitter (default: 1).
     modulation_type : str
         Modulation scheme name ('qam', '64QAM', etc.) (default: 'qam').
+    cdl_model : str
+        Channel CDL profile model ('A', 'B', 'C', 'D') (default: 'C').
+    delay_spread : float
+        RMS delay spread in seconds (default: 1.0e-7).
+    speed : float
+        User mobility speed in m/s (default: 0.0).
+    seed : int
+        Default random seed (default: 42).
     """
 
     fft_size: int = 128
@@ -123,6 +140,10 @@ class LinkConfig:
     cyclic_prefix_length: int = 0
     num_streams_per_tx: int = 1
     modulation_type: str = "qam"
+    cdl_model: str = "C"
+    delay_spread: float = 1.0e-7
+    speed: float = 0.0
+    seed: int = 42
 
     @classmethod
     def from_config(cls, cfg: Optional[Dict[str, Any]] = None) -> LinkConfig:
@@ -134,6 +155,7 @@ class LinkConfig:
             cfg = load_config()
 
         phy = cfg.get("phy", {})
+        chan = cfg.get("channel", {})
         mod = phy.get("modulation", {})
         if isinstance(mod, dict):
             num_bits = int(mod.get("num_bits_per_symbol", 6))
@@ -141,6 +163,8 @@ class LinkConfig:
         else:
             num_bits = 6
             mod_type = "qam"
+
+        speed = chan.get("speed", chan.get("speed_min", 0.0))
 
         return cls(
             fft_size=int(phy.get("fft_size", 128)),
@@ -158,6 +182,10 @@ class LinkConfig:
             cyclic_prefix_length=int(phy.get("cyclic_prefix_length", 0)),
             num_streams_per_tx=1,
             modulation_type=mod_type,
+            cdl_model=str(chan.get("cdl_model", "C")),
+            delay_spread=float(chan.get("delay_spread", 1.0e-7)),
+            speed=float(speed),
+            seed=int(cfg.get("seed", 42)),
         )
 
     def create_resource_grid(self, device: Optional[Union[str, torch.device]] = None) -> Any:
@@ -178,11 +206,31 @@ class LinkConfig:
         return SyntheticResourceGrid(self, device=device)
 
     @property
+    def num_tx_antennas(self) -> int:
+        """Alias for num_tx_ant."""
+        return self.num_tx_ant
+
+    @property
+    def num_rx_antennas(self) -> int:
+        """Alias for num_rx_ant."""
+        return self.num_rx_ant
+
+    @property
+    def guard_subcarriers(self) -> List[int]:
+        """Alias for num_guard_carriers."""
+        return self.num_guard_carriers
+
+    @property
     def num_effective_subcarriers(self) -> int:
         """Number of active subcarriers excluding guard bands and DC null."""
         guards = sum(self.num_guard_carriers) if self.num_guard_carriers else 0
         dc = 1 if self.dc_null else 0
         return self.fft_size - guards - dc
+
+    @property
+    def num_pilot_symbols(self) -> int:
+        """Total number of pilot symbols allocated per slot."""
+        return self.num_effective_subcarriers * len(self.pilot_ofdm_symbol_indices)
 
     @property
     def num_data_symbols(self) -> int:
@@ -219,7 +267,7 @@ def batch_generator(
     channel: Optional[Any] = None,
     link_config: Optional[LinkConfig] = None,
     batch_size: int = 16,
-    ebno_db: float = 10.0,
+    ebno_db: Union[float, torch.Tensor] = 10.0,
     seed: Optional[int] = None,
     device: Optional[Union[str, torch.device]] = None,
     as_generator: bool = False,
@@ -228,13 +276,13 @@ def batch_generator(
 
     Parameters
     ----------
-    channel : CDL or SyntheticCDL, optional
+    channel : CDL or SyntheticCDLChannel, optional
         Sionna CDL or SyntheticCDL channel model. Created via make_cdl() if None.
     link_config : LinkConfig, optional
         Physical layer link configuration. Created via LinkConfig.from_config() if None.
     batch_size : int, optional
         Number of OFDM slots per batch (default: 16).
-    ebno_db : float, optional
+    ebno_db : float or torch.Tensor, optional
         Signal-to-noise ratio Eb/N0 in dB (default: 10.0).
     seed : int, optional
         Deterministic random seed.
@@ -250,7 +298,7 @@ def batch_generator(
         NamedTuple (b, Y, X_pilot, N0, H) containing:
         - b: Transmit bits tensor (batch_size, num_tx, 1, num_data_bits)
         - Y: Received post-FFT frequency grid (batch_size, num_rx_ant, num_ofdm_symbols, fft_size)
-        - X_pilot: Known pilot symbols tensor (1, 1, num_pilots)
+        - X_pilot: Known pilot symbols tensor
         - N0: Noise power spectral density scalar float > 0
         - H: Perfect CSI channel frequency response (batch_size, num_rx_ant, num_tx, num_ofdm_symbols, fft_size)
     """
@@ -272,10 +320,13 @@ def batch_generator(
 
     if channel is None:
         channel = make_cdl(
-            seed=seed,
+            model=link_config.cdl_model,
+            v=link_config.speed,
+            delay_spread=link_config.delay_spread,
+            seed=seed if seed is not None else link_config.seed,
+            carrier_frequency=link_config.carrier_frequency,
             rx_ant=link_config.num_rx_ant,
             tx_ant=link_config.num_tx_ant,
-            carrier_frequency=link_config.carrier_frequency,
             device=device,
         )
 
@@ -287,11 +338,19 @@ def batch_generator(
             np.random.seed(seed)
 
         if _SIONNA_AVAILABLE:
+            if seed is not None:
+                try:
+                    import sionna
+                    if hasattr(sionna, "phy") and hasattr(sionna.phy, "config"):
+                        sionna.phy.config.seed = seed
+                    elif hasattr(sionna, "config"):
+                        sionna.config.seed = seed
+                except Exception:
+                    pass
             rg = link_config.create_resource_grid(device=device)
             bs = BinarySource(seed=seed)
             mapper = Mapper("qam", link_config.num_bits_per_symbol)
             rg_mapper = ResourceGridMapper(rg)
-            ofdm_channel = OFDMChannel(channel, rg, normalize_channel=True, return_channel=True)
 
             num_data_bits = int(rg.num_data_symbols * link_config.num_bits_per_symbol)
             b = bs([batch_size, link_config.num_tx_ant, 1, num_data_bits])
@@ -305,6 +364,7 @@ def batch_generator(
             no_val = ebnodb2no(no_tensor, link_config.num_bits_per_symbol, link_config.coderate)
             no_ = expand_to_rank(no_val, x_rg.ndim)
 
+            ofdm_channel = OFDMChannel(channel, rg, normalize_channel=True, return_channel=True)
             y, h = ofdm_channel(x_rg, no_)
 
             # Squeeze BS receiver dimension: [batch, 1, rx_ant, symbols, fft] -> [batch, rx_ant, symbols, fft]
@@ -329,18 +389,30 @@ def batch_generator(
             b = torch.randint(
                 0, 2, (batch_size, link_config.num_tx_ant, 1, num_data_bits), device=device, dtype=torch.float32
             )
-            N0 = float(10.0 ** (-ebno_db / 10.0) / (link_config.num_bits_per_symbol * link_config.coderate))
+            N0 = float(10.0 ** (-float(ebno_db) / 10.0) / (link_config.num_bits_per_symbol * link_config.coderate))
 
             # Channel response
-            h_r = torch.randn(
-                (batch_size, link_config.num_rx_ant, link_config.num_tx_ant, link_config.num_ofdm_symbols, link_config.fft_size),
-                device=device,
-            )
-            h_i = torch.randn(
-                (batch_size, link_config.num_rx_ant, link_config.num_tx_ant, link_config.num_ofdm_symbols, link_config.fft_size),
-                device=device,
-            )
-            H = torch.complex(h_r, h_i) / math.sqrt(2.0)
+            if hasattr(channel, "sample"):
+                H = channel.sample(
+                    batch_size=batch_size,
+                    num_ofdm_symbols=link_config.num_ofdm_symbols,
+                    fft_size=link_config.fft_size,
+                )
+            elif callable(channel):
+                H = channel(batch_size)
+            else:
+                h_r = torch.randn(
+                    (batch_size, link_config.num_rx_ant, link_config.num_tx_ant, link_config.num_ofdm_symbols, link_config.fft_size),
+                    device=device,
+                )
+                h_i = torch.randn(
+                    (batch_size, link_config.num_rx_ant, link_config.num_tx_ant, link_config.num_ofdm_symbols, link_config.fft_size),
+                    device=device,
+                )
+                H = torch.complex(h_r, h_i) / math.sqrt(2.0)
+
+            if H.dim() == 7:
+                H = H[:, 0, :, 0, :, :, :]
 
             # Signal + noise
             noise_r = torch.randn(
@@ -354,7 +426,7 @@ def batch_generator(
             noise = torch.complex(noise_r, noise_i)
 
             Y = H[:, :, 0, :, :] + noise
-            X_pilot = torch.ones((1, 1, 232), dtype=torch.complex64, device=device)
+            X_pilot = torch.ones((1, 1, link_config.num_pilot_symbols), dtype=torch.complex64, device=device)
 
             return BatchData(b=b, Y=Y, X_pilot=X_pilot, N0=N0, H=H)
 
